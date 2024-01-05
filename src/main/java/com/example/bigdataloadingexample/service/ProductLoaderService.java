@@ -26,4 +26,11 @@ public class ProductLoaderService {
         productRepository.saveAll(products);
         log.debug("Products saved successfully");
     }
+
+    public void readAllProductsAndSaveAllStreamImplementation(String fileName) {
+        log.debug("Attempting to read file: [{}] and save product records stream",
+                  fileName);
+        fileParser.streamProductsFromCsv(fileName).forEach(productRepository::save);
+        log.debug("Products saved successfully");
+    }
 }
