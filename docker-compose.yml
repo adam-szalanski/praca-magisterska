@@ -1,0 +1,23 @@
+version: "1.0"
+networks:
+  todo_lists_network:
+    driver: bridge
+services:
+  postgresql:
+    image: postgres:latest
+    container_name: postgresql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - todo_lists_network
+    environment:
+      - PGUSER=postgres
+      - POSTGRES_DB=big-data-project
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
