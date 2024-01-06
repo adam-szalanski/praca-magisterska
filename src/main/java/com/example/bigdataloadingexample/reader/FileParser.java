@@ -5,10 +5,9 @@ import com.example.bigdataloadingexample.model.Product;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVRecord;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.Reader;
 import java.nio.file.Files;
@@ -27,30 +26,17 @@ public class FileParser {
 
     public List<Product> readProductsFromCsv(String fileName) {
         List<Product> products = new ArrayList<>();
-        try (Reader in = new FileReader(fileName)) {
-            Iterable<CSVRecord> records = CSVFormat.Builder
-                    .create()
-                    .setHeader("Name",
-                               "Category",
-                               "Creation Date",
-                               "Author",
-                               "Release Date",
-                               "Publisher",
-                               "Review Score")
-                    .setSkipHeaderRecord(true)
-                    .build()
-                    .parse(in);
-            for (CSVRecord csvRecord : records) {
-                Product product = fileMapper.toProductModel(csvRecord.get("Name"),
-                                                            csvRecord.get("Category"),
-                                                            LocalDate.parse(csvRecord.get("Creation Date")),
-                                                            csvRecord.get("Author"),
-                                                            LocalDate.parse(csvRecord.get("Release Date")),
-                                                            csvRecord.get("Publisher"),
-                                                            Double.parseDouble(csvRecord.get("Review Score")));
-                products.add(product);
-                log.debug("Product list size: {}",
-                          products.size());
+        try (Reader in = new FileReader(fileName);
+             BufferedReader reader = new BufferedReader(in)) {
+            String line;
+            boolean firstLine = true;
+            while ((line = reader.readLine()) != null) {
+                if (!firstLine) {
+                    products.add(mapLineToProduct(line));
+                }
+                else {
+                    firstLine = false;
+                }
             }
         } catch (Exception e) {
             log.error("File parsing failed",
@@ -65,17 +51,18 @@ public class FileParser {
         Stream<String> lineStream = Files.lines(filePath);
         return lineStream
                 .skip(1)
-                .map(line -> {
-                    String[] values = line.split(",");
-                    return fileMapper.toProductModel(
-                            values[0],
-                            values[1],
-                            LocalDate.parse(values[2]),
-                            values[3],
-                            LocalDate.parse(values[4]),
-                            values[5],
-                            Double.parseDouble(values[6])
-                    );
-                });
+                .map(this::mapLineToProduct);
+    }
+
+    private Product mapLineToProduct(String line) {
+        String[] values = line.split(",");
+        return fileMapper.toProductModel(
+                values[0],
+                values[1],
+                LocalDate.parse(values[2]),
+                values[3],
+                LocalDate.parse(values[4]),
+                values[5],
+                Double.parseDouble(values[6]));
     }
 }
