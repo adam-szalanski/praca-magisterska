@@ -35,7 +35,7 @@ class BigDataLoadingExampleApplicationTests {
         long seconds = (millis % 60000) / 1000;
         long milliseconds = millis % 1000;
 
-        return String.format("%02d godz. %02d min. %02d sek. %03d ms", hours, minutes, seconds, milliseconds);
+        return String.format("%02d h %02d min %02d sec %03d ms", hours, minutes, seconds, milliseconds);
     }
 
     public static String convertCpuUsageToString(float cpuUsage) {
@@ -137,7 +137,7 @@ class BigDataLoadingExampleApplicationTests {
                 }
             }
             log.info("Maximum CPU usage: {}", convertCpuUsageToString(maxCpuUsage));
-            log.info("Maximum memory usage: {}", convertMemoryUsageToString(maxMemoryUsed));
+            log.info("Maximum memory used: {}", convertMemoryUsageToString(maxMemoryUsed));
         } catch (IOException e) {
             log.error("Recording file not found for [{}]", fileName);
         }
