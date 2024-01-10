@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class BigDataLoadingExampleApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(BigDataLoadingExampleApplication.class, args);
+        SpringApplication.run(BigDataLoadingExampleApplication.class,
+                              args);
     }
-
 }
