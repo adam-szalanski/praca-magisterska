@@ -9,6 +9,6 @@ Future plans for this project:
 - design and implement better analysis tool (possibly one that would automatically generate plots into .png files)
 
 Current tests outcome plots:
-![](.\doc\wykres_czasy.png)
-![](.\doc\wykres_cpu.png)
-![](.\doc\wykres_ram.png)
+![](doc/wykres_czasy.png)
+![](doc/wykres_cpu.png)
+![](doc/wykres_ram.png)
