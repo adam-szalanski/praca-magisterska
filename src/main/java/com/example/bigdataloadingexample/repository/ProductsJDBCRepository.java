@@ -12,7 +12,7 @@ public class ProductsJDBCRepository {
     private final JdbcTemplate jdbcTemplate;
 
     @Transactional
-    public void executeQuery(String currentQuery) {
-        jdbcTemplate.update(currentQuery);
+    public void executeQuery(String query) {
+        jdbcTemplate.update(query);
     }
 }

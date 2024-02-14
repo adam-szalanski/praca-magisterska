@@ -1,21 +1,28 @@
 package com.example.bigdataloadingexample;
 
+import com.example.bigdataloadingexample.exceptions.UnableToReadFileException;
+import com.example.bigdataloadingexample.processing.ProcessingStrategy;
+import com.example.bigdataloadingexample.reader.FileParser;
 import com.example.bigdataloadingexample.repository.ProductRepository;
-import com.example.bigdataloadingexample.service.ProductLoadingService;
 import jdk.jfr.Recording;
 import jdk.jfr.consumer.RecordedEvent;
 import jdk.jfr.consumer.RecordingFile;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.util.Strings;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 
 @SpringBootTest
 @Slf4j
@@ -26,8 +33,14 @@ class BigDataLoadingExampleApplicationTests {
 
     @Autowired
     private ProductRepository productRepository;
+    @Qualifier("jpaStrategy")
     @Autowired
-    private ProductLoadingService service;
+    private ProcessingStrategy jpaStrategy;
+    @Qualifier("jdbcStrategy")
+    @Autowired
+    private ProcessingStrategy jdbcStrategy;
+    @Autowired
+    private FileParser fileParser;
 
     public static String convertTimeToString(long millis) {
         long hours = millis / 3600000;
@@ -47,6 +60,20 @@ class BigDataLoadingExampleApplicationTests {
         return String.format("%.2f MB", memoryInMB);
     }
 
+    public static Stream<Arguments> list_available_test_files() {
+        return Stream.of(new File(TEST_DATA_DIRECTORY).listFiles())
+                .filter(file -> !file.isDirectory())
+                .map(File::getName)
+                .sorted((o1, o2) -> {
+                    Integer o1Value = Integer.parseInt(o1.replace("generated_output_", Strings.EMPTY)
+                                                               .replace(".csv", Strings.EMPTY));
+                    Integer o2Value = Integer.parseInt(o2.replace("generated_output_", Strings.EMPTY)
+                                                               .replace(".csv", Strings.EMPTY));
+                    return o1Value.compareTo(o2Value);
+                })
+                .map(Arguments::of);
+    }
+
     @BeforeEach
     @AfterEach
     void truncateTable() {
@@ -55,26 +82,23 @@ class BigDataLoadingExampleApplicationTests {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"generated_output_1000000.csv", "generated_output_2000000.csv", "generated_output_3000000" +
-            ".csv", "generated_output_4000000.csv", "generated_output_5000000.csv", "generated_output_6000000.csv",
-            "generated_output_7000000.csv", "generated_output_8000000.csv", "generated_output_9000000.csv",
-            "generated_output_11000000.csv", "generated_output_21000000.csv", "generated_output_31000000.csv",
-            "generated_output_41000000.csv", "generated_output_51000000.csv", "generated_output_61000000.csv",
-            "generated_output_71000000.csv", "generated_output_81000000.csv", "generated_output_91000000.csv"})
-    void process_file(String fileName) {
+    @MethodSource("list_available_test_files")
+    void process_file(String fileName) throws UnableToReadFileException {
         String filePath = TEST_DATA_DIRECTORY + fileName;
 
-        String streamsRecordingFileName = fileName + ".streams";
+        Stream<String> jdbcData = fileParser.streamProductsFromCsv(filePath);
+        String streamsRecordingFileName = fileName + ".jdbc";
         Recording streamsRecording = startRecording(streamsRecordingFileName);
-        processWithStreams(filePath);
+        processWithJdbc(jdbcData);
         stopRecording(streamsRecording);
         analyzeRecording(streamsRecordingFileName);
 
         truncateTable();
 
-        String arrayListsRecordingFileName = fileName + ".arrayLists";
+        Stream<String> jpaData = fileParser.streamProductsFromCsv(filePath);
+        String arrayListsRecordingFileName = fileName + ".jpa";
         Recording arrayListsRecording = startRecording(arrayListsRecordingFileName);
-        processWithoutStreams(filePath);
+        processWithJpa(jpaData);
         stopRecording(arrayListsRecording);
         analyzeRecording(arrayListsRecordingFileName);
     }
@@ -100,20 +124,20 @@ class BigDataLoadingExampleApplicationTests {
         recording.stop();
     }
 
-    private void processWithStreams(String filePath) {
-        log.info("Beginning processing with streams");
+    private void processWithJdbc(Stream<String> data) {
+        log.info("Beginning processing with JdbcTemplate");
         Long start = System.currentTimeMillis();
-        service.readAllProductsAndSaveAllStreamImplementation(filePath);
+        jdbcStrategy.process(data);
         Long finish = System.currentTimeMillis();
-        log.info("Finished processing with streams. Time taken: {}", convertTimeToString(finish - start));
+        log.info("Finished processing with JdbcTemplate. Time taken: {}", convertTimeToString(finish - start));
     }
 
-    private void processWithoutStreams(String filePath) {
-        log.info("Beginning processing without streams");
+    private void processWithJpa(Stream<String> data) {
+        log.info("Beginning processing with JPA");
         Long start = System.currentTimeMillis();
-        service.readAllProductsAndSaveAll(filePath);
+        jpaStrategy.process(data);
         Long finish = System.currentTimeMillis();
-        log.info("Finished processing without streams. Time taken: {}", convertTimeToString(finish - start));
+        log.info("Finished processing with JPA. Time taken: {}", convertTimeToString(finish - start));
     }
 
     void analyzeRecording(String fileName) {
