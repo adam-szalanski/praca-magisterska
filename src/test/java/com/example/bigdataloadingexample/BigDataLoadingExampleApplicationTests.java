@@ -22,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 @SpringBootTest
@@ -61,13 +62,15 @@ class BigDataLoadingExampleApplicationTests {
     }
 
     public static Stream<Arguments> list_available_test_files() {
-        return Stream.of(new File(TEST_DATA_DIRECTORY).listFiles())
+        Optional<File[]> testFilesNames = Optional.ofNullable(new File(TEST_DATA_DIRECTORY).listFiles());
+        return Stream.of(testFilesNames.orElseThrow())
                 .filter(file -> !file.isDirectory())
                 .map(File::getName)
+                .filter(fileName -> fileName.startsWith("generated_data_") && fileName.endsWith(".csv"))
                 .sorted((o1, o2) -> {
-                    Integer o1Value = Integer.parseInt(o1.replace("generated_output_", Strings.EMPTY)
+                    Integer o1Value = Integer.parseInt(o1.replace("generated_data_", Strings.EMPTY)
                                                                .replace(".csv", Strings.EMPTY));
-                    Integer o2Value = Integer.parseInt(o2.replace("generated_output_", Strings.EMPTY)
+                    Integer o2Value = Integer.parseInt(o2.replace("generated_data_", Strings.EMPTY)
                                                                .replace(".csv", Strings.EMPTY));
                     return o1Value.compareTo(o2Value);
                 })
