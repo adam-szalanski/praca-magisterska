@@ -7,7 +7,7 @@ services:
     image: postgres:latest
     container_name: postgresql
     ports:
-      - "5432:5432"
+      - "5450:5432"
     restart: unless-stopped
     networks:
       - todo_lists_network
@@ -16,6 +16,8 @@ services:
       - POSTGRES_DB=big-data-project
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+    volumes:
+      - ./db-config/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready" ]
       interval: 10s
