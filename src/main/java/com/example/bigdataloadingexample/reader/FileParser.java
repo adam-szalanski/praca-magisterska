@@ -17,14 +17,13 @@ public class FileParser {
 
     public Stream<String> streamProductsFromCsv(String fileName) throws UnableToReadFileException {
         Path filePath = Path.of(fileName);
-        try (Stream<String> lineStream = Files.lines(filePath)) {
-            return lineStream
-                    .skip(1);
+        try {
+            Stream<String> lineStream = Files.lines(filePath);
+
+            return lineStream.skip(1);
         } catch (IOException e) {
             log.error("Unable to read file: [{}]", fileName);
             throw new UnableToReadFileException("Unable to read file: " + fileName);
         }
     }
-
-
 }

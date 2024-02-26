@@ -95,6 +95,7 @@ class BigDataLoadingExampleApplicationTests {
         processWithJdbc(jdbcData);
         stopRecording(streamsRecording);
         analyzeRecording(streamsRecordingFileName);
+        jdbcData.close();
 
         truncateTable();
 
@@ -104,6 +105,7 @@ class BigDataLoadingExampleApplicationTests {
         processWithJpa(jpaData);
         stopRecording(arrayListsRecording);
         analyzeRecording(arrayListsRecordingFileName);
+        jpaData.close();
     }
 
     @SneakyThrows
