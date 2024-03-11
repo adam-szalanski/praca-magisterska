@@ -22,6 +22,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -31,6 +33,10 @@ class BigDataLoadingExampleApplicationTests {
 
     private static final String TEST_DATA_DIRECTORY = "test-data/";
     private static final String TEST_OUTPUT_DIRECTORY = "test-output/";
+    private static final String JDK_CPULOAD = "jdk.CPULoad";
+    private static final String JDK_GCHEAP_SUMMARY = "jdk.PhysicalMemory";
+    private static final String CPU_LOAD_READ_PARAMETER = "machineTotal";
+    private static final String MEMORY_USED_READ_PARAMETER = "usedSize";
 
     @Autowired
     private ProductRepository productRepository;
@@ -112,9 +118,9 @@ class BigDataLoadingExampleApplicationTests {
     private Recording startRecording(String fileName) {
         Path recordingPath = Path.of(TEST_OUTPUT_DIRECTORY + fileName);
         Recording recording = new Recording();
-        recording.enable("jdk.CPULoad")
+        recording.enable(JDK_CPULOAD)
                 .withoutThreshold();
-        recording.enable("jdk.GCHeapSummary")
+        recording.enable(JDK_GCHEAP_SUMMARY)
                 .withoutThreshold();
         recording.setName(fileName);
         recording.setToDisk(true);
@@ -131,42 +137,48 @@ class BigDataLoadingExampleApplicationTests {
 
     private void processWithJdbc(Stream<String> data) {
         log.info("Beginning processing with JdbcTemplate");
-        Long start = System.currentTimeMillis();
         jdbcStrategy.process(data);
-        Long finish = System.currentTimeMillis();
-        log.info("Finished processing with JdbcTemplate. Time taken: {}", convertTimeToString(finish - start));
+        log.info("Finished processing with JdbcTemplate");
     }
 
     private void processWithJpa(Stream<String> data) {
         log.info("Beginning processing with JPA");
-        Long start = System.currentTimeMillis();
         jpaStrategy.process(data);
-        Long finish = System.currentTimeMillis();
-        log.info("Finished processing with JPA. Time taken: {}", convertTimeToString(finish - start));
+        log.info("Finished processing with JPA");
     }
 
     void analyzeRecording(String fileName) {
         Path recordingFilePath = Path.of(TEST_OUTPUT_DIRECTORY + fileName);
         float maxCpuUsage = 0F;
         long maxMemoryUsed = 0L;
+        long milliseconds;
+        Instant startTime = null, endTime = null;
+        Duration duration;
         try (RecordingFile recordingFile = new RecordingFile(recordingFilePath)) {
             while (recordingFile.hasMoreEvents()) {
                 RecordedEvent recordedEvent = recordingFile.readEvent();
-                if (recordedEvent.getEventType()
-                        .getName()
-                        .equals("jdk.CPULoad")) {
-                    float recordedCpuUsage = recordedEvent.getFloat("jvmUser");
-                    maxCpuUsage = Math.max(recordedCpuUsage, maxCpuUsage);
+                if (startTime == null) {
+                    startTime = recordedEvent.getStartTime();
                 }
-                if (recordedEvent.getEventType()
-                        .getName()
-                        .equals("jdk.GCHeapSummary")) {
-                    long recordedMemoryUsage = recordedEvent.getLong("heapUsed");
-                    maxMemoryUsed = Math.max(maxMemoryUsed, recordedMemoryUsage);
+                endTime = recordedEvent.getEndTime();
+                switch (recordedEvent.getEventType().getName()) {
+                    case JDK_CPULOAD: {
+                        float recordedCpuUsage = recordedEvent.getFloat(CPU_LOAD_READ_PARAMETER);
+                        maxCpuUsage = Math.max(recordedCpuUsage, maxCpuUsage);
+                        break;
+                    }
+                    case JDK_GCHEAP_SUMMARY: {
+                        long recordedMemoryUsage = recordedEvent.getLong(MEMORY_USED_READ_PARAMETER);
+                        maxMemoryUsed = Math.max(maxMemoryUsed, recordedMemoryUsage);
+                        break;
+                    }
                 }
             }
+            duration = Duration.between(startTime, endTime);
+            milliseconds = duration.toMillis();
             log.info("Maximum CPU usage: {}", convertCpuUsageToString(maxCpuUsage));
             log.info("Maximum memory used: {}", convertMemoryUsageToString(maxMemoryUsed));
+            log.info("Time taken: {}", convertTimeToString(milliseconds));
         } catch (IOException e) {
             log.error("Recording file not found for [{}]", fileName);
         }
