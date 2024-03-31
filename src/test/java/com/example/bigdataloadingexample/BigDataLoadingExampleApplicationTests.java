@@ -1,5 +1,7 @@
 package com.example.bigdataloadingexample;
 
+import com.example.bigdataloadingexample.excel.ExcelDataArchiver;
+import com.example.bigdataloadingexample.excel.TestDataDto;
 import com.example.bigdataloadingexample.exceptions.UnableToReadFileException;
 import com.example.bigdataloadingexample.processing.ProcessingStrategy;
 import com.example.bigdataloadingexample.reader.FileParser;
@@ -18,12 +20,19 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.PostgreSQLContainerProvider;
+import org.testcontainers.junit.jupiter.Container;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -37,7 +46,12 @@ class BigDataLoadingExampleApplicationTests {
     private static final String JDK_GCHEAP_SUMMARY = "jdk.PhysicalMemory";
     private static final String CPU_LOAD_READ_PARAMETER = "machineTotal";
     private static final String MEMORY_USED_READ_PARAMETER = "usedSize";
-
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    @Container
+    private static final PostgreSQLContainer<?> postgreSQLContainer;
+    private static final String DB_NAME = "praca-magisterska";
+    private static final String USERNAME = "postgres";
+    private static final String PASSWORD = USERNAME;
     @Autowired
     private ProductRepository productRepository;
     @Qualifier("jpaStrategy")
@@ -48,6 +62,27 @@ class BigDataLoadingExampleApplicationTests {
     private ProcessingStrategy jdbcStrategy;
     @Autowired
     private FileParser fileParser;
+    @Autowired
+    private ExcelDataArchiver excelDataArchiver;
+
+    static {
+        PostgreSQLContainerProvider postgreSQLContainerProvider = new PostgreSQLContainerProvider();
+        postgreSQLContainer = (PostgreSQLContainer<?>) postgreSQLContainerProvider.newInstance("latest")
+                .withInitScript("db/init-db.sql")
+                .withDatabaseName(DB_NAME)
+                .withUsername(USERNAME)
+                .withPassword(PASSWORD);
+        postgreSQLContainer.start();
+    }
+
+    @DynamicPropertySource
+    static void registerPgProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url",
+                     () -> String.format("jdbc:postgresql://localhost:%d/%s", postgreSQLContainer.getFirstMappedPort(),
+                                         DB_NAME));
+        registry.add("spring.datasource.username", () -> USERNAME);
+        registry.add("spring.datasource.password", () -> PASSWORD);
+    }
 
     public static String convertTimeToString(long millis) {
         long hours = millis / 3600000;
@@ -59,11 +94,11 @@ class BigDataLoadingExampleApplicationTests {
     }
 
     public static String convertCpuUsageToString(float cpuUsage) {
-        return String.format("%.2f%%", cpuUsage * 100);
+        return String.format("%.2f%%", getCpuUsagePercentage(cpuUsage));
     }
 
     public static String convertMemoryUsageToString(long memoryBytes) {
-        float memoryInMB = memoryBytes / (1024f * 1024f);
+        float memoryInMB = getMemoryInMB(memoryBytes);
         return String.format("%.2f MB", memoryInMB);
     }
 
@@ -94,13 +129,14 @@ class BigDataLoadingExampleApplicationTests {
     @MethodSource("list_available_test_files")
     void process_file(String fileName) throws UnableToReadFileException {
         String filePath = TEST_DATA_DIRECTORY + fileName;
+        TestDataDto testDataDto = prepareDataDto(fileName);
 
         Stream<String> jdbcData = fileParser.streamProductsFromCsv(filePath);
         String streamsRecordingFileName = fileName + ".jdbc";
         Recording streamsRecording = startRecording(streamsRecordingFileName);
         processWithJdbc(jdbcData);
         stopRecording(streamsRecording);
-        analyzeRecording(streamsRecordingFileName);
+        analyzeRecording(TestedMethod.JDBC, testDataDto, streamsRecordingFileName);
         jdbcData.close();
 
         truncateTable();
@@ -110,8 +146,24 @@ class BigDataLoadingExampleApplicationTests {
         Recording arrayListsRecording = startRecording(arrayListsRecordingFileName);
         processWithJpa(jpaData);
         stopRecording(arrayListsRecording);
-        analyzeRecording(arrayListsRecordingFileName);
+        analyzeRecording(TestedMethod.JPA, testDataDto, arrayListsRecordingFileName);
         jpaData.close();
+
+        testDataDto.setTestDate(LocalDateTime.now()
+                                        .format(DATE_TIME_FORMATTER));
+        try {
+            excelDataArchiver.updateExcelFile(testDataDto);
+        } catch (IOException e) {
+            log.error("Failed to update excel file with following data: [{}]", testDataDto, e);
+        }
+
+    }
+
+    private TestDataDto prepareDataDto(String fileName) {
+        TestDataDto testDataDto = new TestDataDto();
+        testDataDto.setFileSize(fileName.replace("generated_data_", Strings.EMPTY)
+                                        .replace(".csv", Strings.EMPTY));
+        return testDataDto;
     }
 
     @SneakyThrows
@@ -147,7 +199,7 @@ class BigDataLoadingExampleApplicationTests {
         log.info("Finished processing with JPA");
     }
 
-    void analyzeRecording(String fileName) {
+    void analyzeRecording(TestedMethod testedMethod, TestDataDto testDataDto, String fileName) {
         Path recordingFilePath = Path.of(TEST_OUTPUT_DIRECTORY + fileName);
         float maxCpuUsage = 0F;
         long maxMemoryUsed = 0L;
@@ -161,7 +213,8 @@ class BigDataLoadingExampleApplicationTests {
                     startTime = recordedEvent.getStartTime();
                 }
                 endTime = recordedEvent.getEndTime();
-                switch (recordedEvent.getEventType().getName()) {
+                switch (recordedEvent.getEventType()
+                        .getName()) {
                     case JDK_CPULOAD: {
                         float recordedCpuUsage = recordedEvent.getFloat(CPU_LOAD_READ_PARAMETER);
                         maxCpuUsage = Math.max(recordedCpuUsage, maxCpuUsage);
@@ -179,8 +232,32 @@ class BigDataLoadingExampleApplicationTests {
             log.info("Maximum CPU usage: {}", convertCpuUsageToString(maxCpuUsage));
             log.info("Maximum memory used: {}", convertMemoryUsageToString(maxMemoryUsed));
             log.info("Time taken: {}", convertTimeToString(milliseconds));
+            switch (testedMethod) {
+                case JPA -> {
+                    testDataDto.setDurationMethodJpa(milliseconds);
+                    testDataDto.setCpuLoadMethodJpa(getCpuUsagePercentage(maxCpuUsage));
+                    testDataDto.setRamUsageMethodJpa(getMemoryInMB(maxMemoryUsed));
+                }
+                case JDBC -> {
+                    testDataDto.setDurationMethodJdbc(milliseconds);
+                    testDataDto.setCpuLoadMethodJdbc(getCpuUsagePercentage(maxCpuUsage));
+                    testDataDto.setRamUsageMethodJdbc(getMemoryInMB(maxMemoryUsed));
+                }
+            }
         } catch (IOException e) {
             log.error("Recording file not found for [{}]", fileName);
         }
+    }
+
+    private static float getCpuUsagePercentage(float cpuUsage) {
+        return cpuUsage * 100;
+    }
+
+    private static float getMemoryInMB(long memoryBytes) {
+        return memoryBytes / (1024f * 1024f);
+    }
+
+    private enum TestedMethod {
+        JDBC, JPA
     }
 }

@@ -13,7 +13,7 @@ services:
       - todo_lists_network
     environment:
       - PGUSER=postgres
-      - POSTGRES_DB=big-data-project
+      - POSTGRES_DB=praca-magisterska
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
     volumes:

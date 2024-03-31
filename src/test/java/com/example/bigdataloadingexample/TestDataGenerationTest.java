@@ -24,7 +24,7 @@ class TestDataGenerationTest {
         List<Arguments> arguments = new ArrayList<>();
 
         for (int i = 1; i <= 100000000; i *= 100) {
-            for (int j = 1; j <= 10; j++) {
+            for (int j = 1; j < 10; j++) {
                 arguments.add(Arguments.of(i * j));
             }
         }
