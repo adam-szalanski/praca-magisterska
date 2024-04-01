@@ -42,7 +42,7 @@ class BigDataLoadingExampleApplicationTests {
 
     private static final String TEST_DATA_DIRECTORY = "test-data/";
     private static final String TEST_OUTPUT_DIRECTORY = "test-output/";
-    private static final String JDK_CPULOAD = "jdk.CPULoad";
+    private static final String JDK_CPU_LOAD = "jdk.CPULoad";
     private static final String JDK_GCHEAP_SUMMARY = "jdk.PhysicalMemory";
     private static final String CPU_LOAD_READ_PARAMETER = "machineTotal";
     private static final String MEMORY_USED_READ_PARAMETER = "usedSize";
@@ -170,7 +170,7 @@ class BigDataLoadingExampleApplicationTests {
     private Recording startRecording(String fileName) {
         Path recordingPath = Path.of(TEST_OUTPUT_DIRECTORY + fileName);
         Recording recording = new Recording();
-        recording.enable(JDK_CPULOAD)
+        recording.enable(JDK_CPU_LOAD)
                 .withoutThreshold();
         recording.enable(JDK_GCHEAP_SUMMARY)
                 .withoutThreshold();
@@ -215,7 +215,7 @@ class BigDataLoadingExampleApplicationTests {
                 endTime = recordedEvent.getEndTime();
                 switch (recordedEvent.getEventType()
                         .getName()) {
-                    case JDK_CPULOAD: {
+                    case JDK_CPU_LOAD: {
                         float recordedCpuUsage = recordedEvent.getFloat(CPU_LOAD_READ_PARAMETER);
                         maxCpuUsage = Math.max(recordedCpuUsage, maxCpuUsage);
                         break;
@@ -235,12 +235,12 @@ class BigDataLoadingExampleApplicationTests {
             switch (testedMethod) {
                 case JPA -> {
                     testDataDto.setDurationMethodJpa(milliseconds);
-                    testDataDto.setCpuLoadMethodJpa(getCpuUsagePercentage(maxCpuUsage));
+                    testDataDto.setCpuLoadMethodJpa(maxCpuUsage);
                     testDataDto.setRamUsageMethodJpa(getMemoryInMB(maxMemoryUsed));
                 }
                 case JDBC -> {
                     testDataDto.setDurationMethodJdbc(milliseconds);
-                    testDataDto.setCpuLoadMethodJdbc(getCpuUsagePercentage(maxCpuUsage));
+                    testDataDto.setCpuLoadMethodJdbc(maxCpuUsage);
                     testDataDto.setRamUsageMethodJdbc(getMemoryInMB(maxMemoryUsed));
                 }
             }
